@@ -1,0 +1,105 @@
+
+token: &INFLUX_TOKEN influxdb2_very_safe_token
+# url: &INFLUX_URL http://influxdb-test.local.net
+defaultBucket: &INFLUX_DEF_BUCKET grafana
+defaultOrg: &INFLUX_DEF_ORG influxdata
+
+grafana:
+  enabled: true
+  adminPassword: grafana_admin_pwd
+  deploymentStrategy:
+    type: Recreate
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 250m
+      memory: 256Mi
+  sidecar:
+    datasources:
+      enabled: true
+  ingress:
+    enabled: true
+    hosts:
+      - grafana-test.local.net
+  dashboardProviders:
+    dashboardproviders.yaml:
+      apiVersion: 1
+      providers:
+      - name: 'glances'
+        orgId: 1
+        folder: ''
+        type: file
+        disableDeletion: false
+        editable: true
+        options:
+          path: /var/lib/grafana/dashboards/glances
+
+  dashboardsConfigMaps:
+    glances: glances-dashboard-cm
+
+  datasources:
+    datasources.yaml:
+      apiVersion: 1
+      datasources:
+      - name: InfluxDB
+        type: influxdb
+        access: proxy
+        url: http://influxdb-test.local.net
+        basicAuth: true
+        withCredentials: false
+        isDefault: false
+        jsonData:
+          defaultBucket: *INFLUX_DEF_BUCKET
+          httpMode: POST
+          organization: *INFLUX_DEF_ORG
+          version: Flux
+        secureJsonData:
+          token: *INFLUX_TOKEN
+        secureJsonFields:
+          token: true
+        version: 2
+        readOnly: false
+
+influxdb2:
+  enabled: true
+  adminUser:
+    password: "influxdb_admin_pwd"
+    retention_policy: "1w"
+    organization: *INFLUX_DEF_ORG
+    bucket: *INFLUX_DEF_BUCKET
+    token: *INFLUX_TOKEN
+
+  ingress:
+    enabled: true
+    hostname: influxdb-test.local.net
+
+  persistence:
+    enabled: true
+    storageClass: &INFLUX_SC influx-test
+    size: 5Gi
+    pvc:
+      apiVersion: v1
+      kind: PersistentVolume
+      metadata:
+        name: influxdb-pv-test
+      spec:
+        accessModes:
+        - ReadWriteOnce
+        capacity:
+          storage: 5Gi
+        hostPath:
+          path: /var/influxdb-test
+          type: DirectoryOrCreate
+        nodeAffinity:
+          required:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: kubernetes.io/hostname
+                operator: In
+                values:
+                - worker-01
+        persistentVolumeReclaimPolicy: Retain
+        storageClassName: *INFLUX_SC
+        volumeMode: Filesystem
